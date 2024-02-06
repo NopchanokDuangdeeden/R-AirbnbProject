@@ -1,0 +1,272 @@
+---
+title: "Airbnb Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Exploration
+
+First, let's load and explore the AirBnB data (Paris data).
+
+```{r}
+library(readr)
+library(dplyr)
+library(shiny)
+library(ggplot2)
+library("lubridate")
+```
+
+Load the AirBnB data 
+
+```{r}
+airbnb_data <-load("C:/Users/Nopchanok/OneDrive/Desktop/DSTI/R/Project R/AirBnB (1).Rdata")
+```
+
+```{r}
+head(airbnb_data)
+dim(L)
+dim(R)
+```
+```{r}
+colnames(L)
+```
+
+```{r}
+colnames(R)
+```
+The AirBnB data set has two different tables named L and R:
+
+- The table "L" contains 95 variables
+- The table "R" contains only two variables. 
+
+# Cleaning the dataset
+
+For our analysis we will use few columns and will drop other columns in the cleaning data process:
+
+```{r}
+New_data <- select(L, id, host_id, host_name, host_is_superhost, neighbourhood, city, zipcode, country_code, latitude, longitude, property_type, room_type, accommodates, bathrooms, bedrooms, beds, bed_type, amenities, price, weekly_price, monthly_price, minimum_nights, maximum_nights, calculated_host_listings_count)
+
+```
+
+```{r}
+colnames(New_data)
+```
+
+```{r}
+dim(New_data)
+```
+Checking NA values and if we need to impute them
+
+```{r}
+table(is.na(New_data))
+```
+Checking NA values per column
+
+```{r}
+colSums(is.na(New_data))
+```
+
+For each variable, we replaced the missing values by the mean of the corresponding column.
+
+```{r}
+## Bathrooms
+a = mean(New_data$bathrooms,na.rm = TRUE)
+sel = is.na(New_data$bathrooms) 
+New_data$bathrooms[sel] = a
+
+## Bedrooms
+b = mean(New_data$bedrooms,na.rm = TRUE)
+sel = is.na(New_data$bedrooms)
+New_data$bedrooms[sel] = b
+
+##Beds 
+c = mean(New_data$beds,na.rm = TRUE) 
+sel = is.na(New_data$beds)
+New_data$beds[sel] = c
+```
+
+```{r}
+colSums(is.na(New_data))
+```
+
+# Analyze Data
+
+##Relationship between prices and apartment feature
+
+```{r}
+pricefeature <- select(L, id, property_type, bathrooms, bed_type, price, host_is_superhost, room_type, bedrooms, weekly_price, neighbourhood, city, beds, monthly_price, latitude, minimum_nights)
+pricefeature$priceformatted <- as.numeric(gsub("\\$", "",pricefeature$price))
+```
+
+Imputing NA values
+
+```{r}
+for (j in 1:ncol(pricefeature)){
+  sel = is.na(pricefeature[,j])
+  pricefeature[sel,j] = mean(pricefeature[,j],na.rm=TRUE) 
+}
+```
+
+Converting float values of bedroooms to int
+
+```{r}
+pricefeature$bedrooms <- as.integer(pricefeature$bedrooms)
+table(pricefeature$bedrooms)
+```
+
+
+-Price by Property type
+
+```{r}
+pricefeature <- pricefeature %>% mutate(property_type = replace(property_type, property_type == "", "Other"))
+ggplot(pricefeature, aes(x=reorder(property_type, priceformatted), y=priceformatted, fill=property_type) ) +
+geom_boxplot(outlier.shape = NA) + coord_flip() + theme(legend.key.size = unit(0.4, 'cm')) +labs(title= "Property Type vs Price", y="Price($)", x = "Features", fill = "Features") + scale_y_continuous(limits = c(0,700))
+```
+
+- Price by Room type
+
+```{r}
+ggplot(pricefeature, aes(x=reorder(room_type, priceformatted), y=priceformatted, fill=room_type) ) +
+geom_boxplot(outlier.shape = NA) + theme(legend.key.size = unit(0.4, 'cm')) + labs(title= "Room type vs Price", y="Price($)", x = "Features", fill = "Features") + scale_y_continuous(limits = c(0,200))
+```
+
+Convertir bedrooms column to factor to plot.
+
+```{r}
+pricefeature$bedrooms <- as.factor(pricefeature$bedrooms)
+```
+
+- Price by Bedrooms quantity
+
+```{r}
+ggplot(pricefeature, aes(x=bedrooms, y=priceformatted, fill=bedrooms) ) +
+geom_boxplot(outlier.shape = NA) + coord_flip() + theme(legend.key.size = unit(0.4, 'cm')) + labs(title= "Bedrooms Quantity vs Price", y="Price($)", x = "Features", fill = "Features") 
+```
+
+### Conclusion 
+
+Relationship between prices and apartment feature I selected "Property type", "room Type" and "bedrooms" 
+For property type,there is some few types different like "Chalet, Villa" that are the most expensive types and the cheapest ones are "Tent", "Cave" and "Treehouse"
+For Room type, shared room is the cheapest type and entire home/apt is the most expensive type.
+And for bedrooms quantity, we see a clearly relation between while the accommodation have more bedrooms they are more expensive excepting two situations (7,9).
+
+## Number of apartments per owner answer
+
+```{r}
+New_data$host_id <- factor(New_data$host_id)
+```
+```{r}
+host_apartment_count <- New_data %>% group_by(New_data$host_id) %>% count(New_data$host_id)
+host_apartment_count$n <- factor(host_apartment_count$n)
+host_apartment_count <- host_apartment_count[order(host_apartment_count$n, decreasing = TRUE),]
+host_df_toplot <- head(host_apartment_count,100)
+host_df_toplot$n <- as.numeric(levels(host_df_toplot$n))[host_df_toplot$n]
+host_df_toplot
+```
+```{r}
+df_host_to_plot <- host_apartment_count %>%  group_by(host_apartment_count$n) %>% count(host_apartment_count$n )
+df_host_to_plot$n <- as.factor(df_host_to_plot$n)
+df_host_to_plot$n <- as.numeric(levels(df_host_to_plot$n))[df_host_to_plot$n]
+df_host_to_plot$`host_apartment_count$n` <- as.numeric(levels(df_host_to_plot$`host_apartment_count$n`))[df_host_to_plot$`host_apartment_count$n`]
+df_host_to_plot
+```
+
+
+```{r}
+ggplot(df_host_to_plot, aes(x=`host_apartment_count$n`, y=n) ) +
+geom_point(alpha = 2/5) + labs(title= "Number of aparments per host", y="Quantity of Host (Log10)", x = "Quantity of apartment owned", fill = "Legend - Host") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), legend.position = "none") + scale_y_continuous(trans = "log10") 
+```
+
+### Conclusion 
+
+So we know that around 41000 host has only 1 accommodations
+
+## Renting Price per Arrondissemment  
+
+```{r}
+arrondissement_price <- New_data %>%
+  select(c('id', 'host_id','zipcode','price'))%>%
+  filter(zipcode %in% c(seq(75001,75020,1),75116))%>%
+  mutate(arrondissement=substring(zipcode,5-1,5),price_formatted=(as.numeric(gsub("\\$", "",price))))
+```
+
+Imputing NA values in our "price_formatted" column for the mean price
+
+```{r}
+colSums(is.na(arrondissement_price))
+```
+
+```{r}
+for (j in 1:ncol(arrondissement_price)){
+  sel = is.na(arrondissement_price[,j])
+  arrondissement_price[sel,j] = mean(arrondissement_price[,j],na.rm=TRUE) 
+}
+```
+
+Checking data types of arrondissement_price table and computing mean price by arrondissement
+
+```{r}
+str(arrondissement_price)
+```
+
+```{r}
+mean_renting_price <- group_by(arrondissement_price, arrondissement) %>% summarize(Renting_Price = mean(price_formatted))
+```
+
+```{r}
+mp_arr_plot <- ggplot(mean_renting_price, aes(x=arrondissement, y=Renting_Price, fill=arrondissement) ) +
+geom_bar (stat="identity")+theme_minimal() + labs(title= "Renting Price mean per Arrondissement", y="Renting Price", x = "Arrondissement", fill = "Arrondissement") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), legend.key.size = unit(0.4, 'cm'), legend.position = "none")
+mp_arr_plot
+```
+
+### Conclusion 
+
+the mean renting price of some arrondissements are more than 100$, the neighbourhood might have a great influence on the listing price
+
+## Visit frequency of the different quarters according to time answer
+
+```{r}
+visit_feq_df <- inner_join(R,arrondissement_price,by=c('listing_id'='id'))
+visit_feq_df$date <- ymd (visit_feq_df$date)
+visit_feq_df$Year <- format(as.Date(visit_feq_df$date), "%Y")
+visit_feq_df$month <- format(as.Date(visit_feq_df$date), "%m")
+
+```
+
+Group by month year and arrondissement with dplyr and summarize them with respect to number of times by month appears each listing id. 
+
+```{recho=TRUE}
+Visit_feq_df_grouped <- visit_feq_df %>% group_by(Year,month,arrondissement) %>% summarize(nummonth=n())
+visit_df_to_plot <- Visit_feq_df_grouped %>% list(aarrondissement %in% "12")
+
+```
+
+Plotting visits of Arrondissement 12 vs all years
+
+```{r echo=TRUE}
+ggplot(visit_df_to_plot, aes(x = month, y = nummonth, group = Year, color = Year, linetype = Year)) +
+geom_line()+ xlab("Month of the year") + ylab("Total visits")
+```
+
+Plotting visits of all Arrondissements vs all Years
+
+```{r echo=TRUE}
+ggplot(Visit_feq_df_grouped, aes(x = month, y = nummonth, group = Year, color = Year, linetype = Year)) +
+geom_line()+ xlab("Month of the year") + ylab("Total visits") + theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5), axis.text.x=element_blank()) +
+facet_wrap(~ arrondissement)
+```
+
+### Conclusion 
+
+We can see this in two parts, the first part is about years, we can see easily that there is an increment on complete reservations starting from 2014, it may be because AirBNB started to consolidate its APP as the best "Rent App" and people started to use it as a primary rent app, and the second part is about months, we can see that in all years and all arrondissements there is an increment on complete reservations in June - July and Augusts, correspond to summer in Paris. 
+
+About the arrondissement, we can see that one of the cheapest arrondissements (arrondissement 18) (insight found in the previous analysis) is the most visited one so far, with a considerable number of visits each year.
+
+
+
+
+
+
